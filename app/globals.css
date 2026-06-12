@@ -92,6 +92,44 @@ input[type="text"]:focus {
   border-color: var(--accent);
 }
 
+.suggest {
+  position: relative;
+  flex: 1;
+}
+
+.suggest-list {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  right: 0;
+  z-index: 20;
+  list-style: none;
+  background: var(--card-2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  overflow: hidden;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
+}
+
+.suggest-list li {
+  padding: 11px 14px;
+  font-size: 0.93rem;
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  border-bottom: 1px solid var(--border);
+}
+
+.suggest-list li:last-child {
+  border-bottom: none;
+}
+
+.suggest-list li.hi {
+  background: var(--accent);
+  color: #fff;
+}
+
 .btn-loc {
   background: var(--card-2);
   border: 1px solid var(--border);

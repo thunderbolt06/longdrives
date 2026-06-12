@@ -15,10 +15,11 @@ const KIND_EMOJI = {
 
 export default function Home() {
   const [query, setQuery] = useState("");
-  const [coords, setCoords] = useState(null); // {lat, lon} from geolocation
+  const [startSel, setStartSel] = useState(null); // {lat, lon, name?} picked or geolocated
   const [hours, setHours] = useState(3);
   const [mode, setMode] = useState("roundtrip");
   const [destQuery, setDestQuery] = useState("");
+  const [destSel, setDestSel] = useState(null);
   const [sightseeing, setSightseeing] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -31,7 +32,7 @@ export default function Home() {
     }
     navigator.geolocation.getCurrentPosition(
       (pos) => {
-        setCoords({ lat: pos.coords.latitude, lon: pos.coords.longitude });
+        setStartSel({ lat: pos.coords.latitude, lon: pos.coords.longitude });
         setQuery("📍 Current location");
         setError(null);
       },
@@ -50,14 +51,21 @@ export default function Home() {
         mode,
         sightseeing,
       };
-      if (coords && query.startsWith("📍")) {
-        body.lat = coords.lat;
-        body.lon = coords.lon;
+      if (startSel) {
+        body.lat = startSel.lat;
+        body.lon = startSel.lon;
+        if (startSel.name) body.name = startSel.name;
       } else {
         body.query = query;
       }
       if (mode === "oneway" && destQuery.trim()) {
-        body.destQuery = destQuery.trim();
+        if (destSel) {
+          body.destLat = destSel.lat;
+          body.destLon = destSel.lon;
+          body.destName = destSel.name;
+        } else {
+          body.destQuery = destQuery.trim();
+        }
       }
       const res = await fetch("/api/plan", {
         method: "POST",
@@ -91,13 +99,16 @@ export default function Home() {
         <div className="field">
           <label>Start from</label>
           <div className="loc-row">
-            <input
-              type="text"
+            <PlaceInput
               placeholder="City, address or landmark…"
               value={query}
-              onChange={(e) => {
-                setQuery(e.target.value);
-                setCoords(null);
+              onChange={(v) => {
+                setQuery(v);
+                setStartSel(null);
+              }}
+              onPick={(s) => {
+                setQuery(s.name);
+                setStartSel(s);
               }}
               required
             />
@@ -150,11 +161,17 @@ export default function Home() {
         {mode === "oneway" && (
           <div className="field">
             <label>Destination (optional)</label>
-            <input
-              type="text"
+            <PlaceInput
               placeholder="Leave empty and we'll find a scenic one"
               value={destQuery}
-              onChange={(e) => setDestQuery(e.target.value)}
+              onChange={(v) => {
+                setDestQuery(v);
+                setDestSel(null);
+              }}
+              onPick={(s) => {
+                setDestQuery(s.name);
+                setDestSel(s);
+              }}
             />
             {destQuery.trim() && (
               <div className="hint">
@@ -198,6 +215,91 @@ export default function Home() {
         Maps with live traffic
       </div>
     </main>
+  );
+}
+
+// Text input with debounced place suggestions from /api/suggest. Picking a
+// suggestion hands exact coordinates to the parent via onPick.
+function PlaceInput({ value, onChange, onPick, placeholder, required }) {
+  const [items, setItems] = useState([]);
+  const [open, setOpen] = useState(false);
+  const [hi, setHi] = useState(-1);
+  const timer = useRef(null);
+  const seq = useRef(0);
+
+  function handleChange(e) {
+    const v = e.target.value;
+    onChange(v);
+    clearTimeout(timer.current);
+    if (v.trim().length < 2 || v.startsWith("📍")) {
+      setItems([]);
+      setOpen(false);
+      return;
+    }
+    timer.current = setTimeout(async () => {
+      const id = ++seq.current;
+      try {
+        const res = await fetch(`/api/suggest?q=${encodeURIComponent(v.trim())}`);
+        const data = await res.json();
+        if (id !== seq.current) return; // a newer request superseded this one
+        setItems(data.suggestions || []);
+        setHi(-1);
+        setOpen(true);
+      } catch {}
+    }, 300);
+  }
+
+  function pick(s) {
+    setOpen(false);
+    setItems([]);
+    onPick(s);
+  }
+
+  return (
+    <div className="suggest">
+      <input
+        type="text"
+        placeholder={placeholder}
+        value={value}
+        required={required}
+        onChange={handleChange}
+        onFocus={() => items.length > 0 && setOpen(true)}
+        onBlur={() => setTimeout(() => setOpen(false), 150)}
+        onKeyDown={(e) => {
+          if (!open || items.length === 0) return;
+          if (e.key === "ArrowDown") {
+            e.preventDefault();
+            setHi((h) => (h + 1) % items.length);
+          } else if (e.key === "ArrowUp") {
+            e.preventDefault();
+            setHi((h) => (h <= 0 ? items.length - 1 : h - 1));
+          } else if (e.key === "Enter" && hi >= 0) {
+            e.preventDefault();
+            pick(items[hi]);
+          } else if (e.key === "Escape") {
+            setOpen(false);
+          }
+        }}
+      />
+      {open && items.length > 0 && (
+        <ul className="suggest-list" role="listbox">
+          {items.map((s, i) => (
+            <li
+              key={`${s.lat},${s.lon}`}
+              className={i === hi ? "hi" : ""}
+              onMouseDown={(e) => {
+                e.preventDefault(); // keep focus so blur doesn't race the click
+                pick(s);
+              }}
+              onClick={() => pick(s)}
+              onMouseEnter={() => setHi(i)}
+            >
+              {s.name}
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
   );
 }
 

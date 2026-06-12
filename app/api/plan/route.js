@@ -15,7 +15,10 @@ export async function POST(req) {
     let origin;
     if (typeof body.lat === "number" && typeof body.lon === "number") {
       origin = { lat: body.lat, lon: body.lon };
-      origin.name = (await reverseGeocode(body.lat, body.lon)) || "Your location";
+      origin.name =
+        (body.name && String(body.name)) ||
+        (await reverseGeocode(body.lat, body.lon)) ||
+        "Your location";
     } else if (body.query) {
       origin = await geocode(String(body.query));
       if (!origin) return err(`Couldn't find "${body.query}".`, 404);
@@ -23,11 +26,20 @@ export async function POST(req) {
       return err("Provide a start location.", 400);
     }
 
-    // Optional pinned destination (one-way trips only).
+    // Optional pinned destination (one-way trips only). Accepts coordinates
+    // from a picked suggestion, or free text to geocode.
     let destination = null;
-    if (body.mode === "oneway" && body.destQuery) {
-      destination = await geocode(String(body.destQuery));
-      if (!destination) return err(`Couldn't find "${body.destQuery}".`, 404);
+    if (body.mode === "oneway") {
+      if (typeof body.destLat === "number" && typeof body.destLon === "number") {
+        destination = {
+          lat: body.destLat,
+          lon: body.destLon,
+          name: body.destName ? String(body.destName) : "Destination",
+        };
+      } else if (body.destQuery) {
+        destination = await geocode(String(body.destQuery));
+        if (!destination) return err(`Couldn't find "${body.destQuery}".`, 404);
+      }
     }
 
     const plan = await planDrive({
