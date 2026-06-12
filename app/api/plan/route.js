@@ -23,11 +23,19 @@ export async function POST(req) {
       return err("Provide a start location.", 400);
     }
 
+    // Optional pinned destination (one-way trips only).
+    let destination = null;
+    if (body.mode === "oneway" && body.destQuery) {
+      destination = await geocode(String(body.destQuery));
+      if (!destination) return err(`Couldn't find "${body.destQuery}".`, 404);
+    }
+
     const plan = await planDrive({
       origin,
       minutes,
       roundTrip: body.mode !== "oneway",
       sightseeing: Boolean(body.sightseeing),
+      destination,
     });
     return Response.json(plan);
   } catch (e) {

@@ -18,6 +18,7 @@ export default function Home() {
   const [coords, setCoords] = useState(null); // {lat, lon} from geolocation
   const [hours, setHours] = useState(3);
   const [mode, setMode] = useState("roundtrip");
+  const [destQuery, setDestQuery] = useState("");
   const [sightseeing, setSightseeing] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -54,6 +55,9 @@ export default function Home() {
         body.lon = coords.lon;
       } else {
         body.query = query;
+      }
+      if (mode === "oneway" && destQuery.trim()) {
+        body.destQuery = destQuery.trim();
       }
       const res = await fetch("/api/plan", {
         method: "POST",
@@ -143,6 +147,24 @@ export default function Home() {
           </div>
         </div>
 
+        {mode === "oneway" && (
+          <div className="field">
+            <label>Destination (optional)</label>
+            <input
+              type="text"
+              placeholder="Leave empty and we'll find a scenic one"
+              value={destQuery}
+              onChange={(e) => setDestQuery(e.target.value)}
+            />
+            {destQuery.trim() && (
+              <div className="hint">
+                We'll route you there the scenic way — drive duration is
+                estimated from the route, not the slider.
+              </div>
+            )}
+          </div>
+        )}
+
         <div className="field">
           <div className="toggle-row">
             <div>
@@ -195,7 +217,7 @@ function Result({ plan }) {
             {h > 0 ? `${h}h ` : ""}
             {m}m
           </div>
-          <div className="k">Drive time</div>
+          <div className="k">{plan.liveTraffic ? "With live traffic" : "Drive time"}</div>
         </div>
         {plan.distanceKm && (
           <div className="stat">
